@@ -5,7 +5,7 @@ import type { SSRManifest } from "astro";
 import { App } from "astro/app";
 import { setGetEnv } from "astro/env/setup";
 import { createISRHandler } from "./isr.ts";
-import type { AdapterOptions, ManifestEntry } from "./types.ts";
+import type { AdapterOptions, ManifestEntry, ServerExports } from "./types.ts";
 
 // Required for astro:env/server to resolve env vars at runtime.
 setGetEnv((key) => process.env[key]);
@@ -13,7 +13,7 @@ setGetEnv((key) => process.env[key]);
 // Called by the generated entry.mjs to extract the SSR request handler.
 // Uses the Web-standard App (not NodeApp) since Bun natively supports the
 // Fetch API — no Node http.IncomingMessage/ServerResponse conversion needed.
-export function createExports(ssrManifest: SSRManifest) {
+export function createExports(ssrManifest: SSRManifest): ServerExports {
   const app = new App(ssrManifest);
 
   const handler = async (request: Request): Promise<Response> => {
@@ -24,12 +24,12 @@ export function createExports(ssrManifest: SSRManifest) {
     return app.render(request, { addCookieHeader: true, routeData });
   };
 
-  return { handler };
+  return { handler: handler };
 }
 
 // Called by entry.mjs with the adapter args (see index.ts).
 // Owns the full server — static file serving + SSR fallback.
-export function start(ssrManifest: SSRManifest, options: AdapterOptions) {
+export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
   const { handler } = createExports(ssrManifest);
 
   // Resolve dirs from the file:// URLs passed through adapter args.

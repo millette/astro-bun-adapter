@@ -59,3 +59,8 @@ export interface ManifestEntry {
 }
 
 export type StaticManifest = Record<string, ManifestEntry>;
+
+/** The exports returned by `createExports()` in the server entrypoint. */
+export interface ServerExports {
+  handler: (request: Request) => Promise<Response>;
+}
