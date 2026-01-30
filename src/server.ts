@@ -55,7 +55,8 @@ export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
       handler,
       options.isr.maxByteSize,
       options.isr.cacheDir,
-      buildId
+      buildId,
+      options.isr.preFillMemoryCache
     );
   }
 

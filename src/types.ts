@@ -53,6 +53,12 @@ export interface ISROptions {
   maxByteSize: number;
   /** Directory for persistent ISR cache storage. */
   cacheDir: string;
+  /**
+   * Whether to pre-fill the in-memory LRU cache from disk at startup.
+   * When `false` (default), the disk index is restored for L2 fallback but
+   * entries are only loaded into memory on first access.
+   */
+  preFillMemoryCache: boolean;
 }
 
 /** Pre-computed response headers for a static file. */

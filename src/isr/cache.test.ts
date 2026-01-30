@@ -31,6 +31,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: testCacheDir(),
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     const entry = makeEntry(100);
@@ -47,6 +48,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: testCacheDir(),
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     expect(await cache.get("missing")).toBeUndefined();
@@ -58,6 +60,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: testCacheDir(),
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("a", makeEntry(100));
@@ -72,6 +75,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 200,
       cacheDir: testCacheDir(),
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("a", makeEntry(100));
@@ -92,6 +96,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 200,
       cacheDir: testCacheDir(),
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("a", makeEntry(100));
@@ -114,6 +119,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 200,
       cacheDir: testCacheDir(),
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("a", makeEntry(100));
@@ -136,6 +142,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache1.set("a", {
@@ -162,6 +169,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: true,
     });
 
     const a = await cache2.get("a");
@@ -187,6 +195,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     // Should start empty, not throw.
@@ -202,6 +211,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache1.set("a", makeEntry(100));
@@ -215,6 +225,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 200,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: true,
     });
 
     // "a" and "b" fit (200 bytes), "c" would exceed in-memory budget.
@@ -231,6 +242,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 200,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("a", makeEntry(100));
@@ -253,6 +265,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("a", makeEntry(100));
@@ -290,6 +303,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
     await cache1.set("a", {
       body: new Uint8Array([10, 20, 30]),
@@ -303,11 +317,11 @@ describe("PersistentLRUCache", () => {
     cache1.destroy();
 
     // Create a new cache so "a" is only on disk (not in-memory LRU yet).
-    // Use a small budget so pre-fill doesn't load it automatically.
     const cache2 = new PersistentLRUCache({
-      maxByteSize: 0,
+      maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     // Fire multiple concurrent get() calls for the same key.
@@ -334,6 +348,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
     await cache1.set("x", {
       body: new Uint8Array([1, 2, 3]),
@@ -359,6 +374,7 @@ describe("PersistentLRUCache", () => {
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: true,
     });
 
     // get() during pre-fill should return the correct entry.
@@ -373,12 +389,63 @@ describe("PersistentLRUCache", () => {
     cache2.destroy();
   });
 
+  test("preFillMemoryCache false — skips pre-fill but disk fallback works", async () => {
+    const dir = testCacheDir();
+
+    // Populate disk with entries.
+    const cache1 = new PersistentLRUCache({
+      maxByteSize: 1024,
+      cacheDir: dir,
+      buildId: BUILD_ID,
+      preFillMemoryCache: false,
+    });
+    await cache1.set("a", {
+      body: new Uint8Array([1, 2, 3]),
+      headers: [],
+      status: 200,
+      cachedAt: Date.now(),
+      sMaxAge: 60,
+      swr: 0,
+    });
+    await cache1.set("b", {
+      body: new Uint8Array([4, 5, 6]),
+      headers: [],
+      status: 200,
+      cachedAt: Date.now(),
+      sMaxAge: 60,
+      swr: 0,
+    });
+    await cache1.save();
+    cache1.destroy();
+
+    // Reload with preFillMemoryCache: false — entries should NOT be in memory
+    // after construction, but should still be accessible via disk fallback.
+    const cache2 = new PersistentLRUCache({
+      maxByteSize: 1024,
+      cacheDir: dir,
+      buildId: BUILD_ID,
+      preFillMemoryCache: false,
+    });
+
+    // Entries are available via L2 disk fallback.
+    const a = await cache2.get("a");
+    expect(a).toBeDefined();
+    expect(Array.from(a?.body ?? [])).toEqual([1, 2, 3]);
+
+    const b = await cache2.get("b");
+    expect(b).toBeDefined();
+    expect(Array.from(b?.body ?? [])).toEqual([4, 5, 6]);
+
+    cache2.destroy();
+  });
+
   test("individual entry files — each set creates a .cbor file", async () => {
     const dir = testCacheDir();
     const cache = new PersistentLRUCache({
       maxByteSize: 1024,
       cacheDir: dir,
       buildId: BUILD_ID,
+      preFillMemoryCache: false,
     });
 
     await cache.set("x", makeEntry(50));

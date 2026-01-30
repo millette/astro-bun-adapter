@@ -62,6 +62,7 @@ interface BunAdapterConfig {
     | {
         maxByteSize?: number;
         cacheDir?: string;
+        preFillMemoryCache?: boolean;
       };
 }
 
@@ -128,6 +129,7 @@ export default function bunAdapter(
                     maxByteSize: isrConfig.maxByteSize ?? 50 * 1024 * 1024,
                     cacheDir:
                       isrConfig.cacheDir ?? join(adapterDir, "isr-cache"),
+                    preFillMemoryCache: isrConfig.preFillMemoryCache ?? false,
                   }
                 : false,
           })

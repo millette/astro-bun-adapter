@@ -37,6 +37,7 @@ interface PersistentLRUCacheOptions {
   maxByteSize: number;
   cacheDir: string;
   buildId: string;
+  preFillMemoryCache: boolean;
 }
 
 /**
@@ -57,6 +58,7 @@ export class PersistentLRUCache {
   private readonly maxByteSize: number;
   private readonly cacheDir: string;
   private readonly buildId: string;
+  private readonly preFillMemoryCache: boolean;
   private readonly entriesDir: string;
   private readonly indexPath: string;
 
@@ -82,6 +84,7 @@ export class PersistentLRUCache {
     this.maxByteSize = options.maxByteSize;
     this.cacheDir = options.cacheDir;
     this.buildId = options.buildId;
+    this.preFillMemoryCache = options.preFillMemoryCache;
     this.entriesDir = join(options.cacheDir, options.buildId, "entries");
     this.indexPath = join(options.cacheDir, options.buildId, "index.json");
 
@@ -407,6 +410,8 @@ export class PersistentLRUCache {
     // Mark ready — get() can now serve disk fallback requests while
     // pre-fill proceeds in the background.
     this.ready = true;
+
+    if (!this.preFillMemoryCache) return;
 
     // Pre-fill in-memory LRU from disk entries up to maxByteSize.
     // Uses loadFromDisk() so concurrent get() calls deduplicate.

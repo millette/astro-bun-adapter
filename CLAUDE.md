@@ -8,8 +8,9 @@ Astro adapter for Bun (`@wyattjoh/astro-bun-adapter`). Enables Astro SSR sites t
 
 ## Commands
 
-- **Build**: `bun run build` — runs `tsc` (declarations only) then `bun build` with externalized `astro` and `mrmime`
-- **Test**: `bun run test` — runs Bun's built-in test runner
+- **Build**: `bun run build` — runs `bunup` to bundle `src/index.ts` and `src/server.ts` (target: bun, format: esm, with declarations, sourcemaps, all packages external)
+- **Test**: `bun run test` — runs Bun's built-in test runner concurrently on `src/`
+- **Single test**: `bun test src/path/to/file.test.ts`
 - **Typecheck**: `bun run typecheck` — runs `tsc --noEmit`
 - **Lint**: `bun run lint` — runs Biome (`biome check .`)
 - **Lint fix**: `bun run lint:fix` — runs Biome with auto-fix
@@ -59,7 +60,14 @@ This project uses `semantic-release` with the Angular preset (`.releaserc.cjs`),
 
 Choose the commit type carefully — it determines whether a release is triggered and what kind of version bump occurs.
 
+## Dependencies
+
+- **`cache-control-parser`** — Parses `Cache-Control` headers for ISR
+- **`cbor2`** — CBOR serialization for ISR disk persistence
+- **`debug`** — Structured debug logging (namespace: `@wyattjoh/astro-bun-adapter:*`)
+- **`mrmime`** — MIME type lookup for static file serving
+
 ## Build Output
 
-- `dist/` contains TypeScript declarations (from `tsc`) and bundled JS (from `bun build`)
+- `dist/` contains TypeScript declarations and bundled JS (from `bunup`)
 - Package exports: `.` → `dist/index.js`, `./server.js` → `dist/server.js`

@@ -79,12 +79,14 @@ export function createISRHandler(
   handler: (request: Request) => Promise<Response>,
   maxByteSize: number,
   cacheDir: string,
-  buildId: string
+  buildId: string,
+  preFillMemoryCache: boolean
 ): ISRHandler {
   const cache = new PersistentLRUCache({
     maxByteSize,
     cacheDir,
     buildId,
+    preFillMemoryCache,
   });
   const revalidating = new Set<string>();
   const inflight = new Map<string, Promise<ISRCacheEntry | undefined>>();
