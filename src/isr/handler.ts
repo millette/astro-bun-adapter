@@ -6,20 +6,22 @@ import { PersistentLRUCache } from "./cache.ts";
 const log = debug("@wyattjoh/astro-bun-adapter:isr");
 
 function buildCacheEntry(
-  response: Response,
+  headers: [string, string][],
+  status: number,
   body: Uint8Array
 ): ISRCacheEntry | undefined {
-  const cc = parseCacheControl(response.headers.get("cache-control") ?? "");
+  const ccHeader =
+    headers.find(([name]) => name === "cache-control")?.[1] ?? "";
+  const cc = parseCacheControl(ccHeader);
   const sMaxAge = cc["s-maxage"];
   if (!sMaxAge || sMaxAge <= 0) return undefined;
 
   const swr = cc["stale-while-revalidate"] ?? 0;
-  const headers: [string, string][] = Array.from(response.headers.entries());
 
   return {
     body,
     headers,
-    status: response.status,
+    status,
     cachedAt: Date.now(),
     sMaxAge,
     swr,
@@ -53,11 +55,14 @@ function renderToEntry(
   cacheStatus: CacheStatus
 ): RenderResult {
   const done = handler(request).then((response) => {
-    response.headers.set("x-astro-cache", cacheStatus);
     const clone = response.clone();
+    // Capture clean headers and status before mutating the response with x-astro-cache.
+    const headers: [string, string][] = Array.from(clone.headers.entries());
+    const { status } = clone;
+    response.headers.set("x-astro-cache", cacheStatus);
     const entryPromise = clone.arrayBuffer().then(async (buf) => {
       const body = new Uint8Array(buf);
-      const entry = buildCacheEntry(response, body);
+      const entry = buildCacheEntry(headers, status, body);
       if (entry) {
         log(
           `ISR cached ${pathname} (s-maxage=${entry.sMaxAge}, swr=${entry.swr})`
@@ -91,7 +96,7 @@ export function createISRHandler(
   const revalidating = new Set<string>();
   const inflight = new Map<string, Promise<ISRCacheEntry | undefined>>();
 
-  return async (request, pathname) => {
+  const isrHandler = (async (request, pathname) => {
     const entry = await cache.get(pathname);
     if (entry) {
       const elapsed = Date.now() - entry.cachedAt;
@@ -152,5 +157,9 @@ export function createISRHandler(
     const response = await handler(request);
     response.headers.set("x-astro-cache", "BYPASS");
     return response;
-  };
+  }) as ISRHandler;
+
+  isrHandler.shutdown = () => cache.save();
+
+  return isrHandler;
 }

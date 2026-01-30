@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { describe, expect, mock, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createISRHandler } from "./handler.ts";
@@ -19,20 +18,11 @@ function request(path: string) {
   return new Request(`http://localhost${path}`);
 }
 
-let testDir: string;
-
-afterEach(() => {
-  if (testDir) {
-    rmSync(testDir, { recursive: true, force: true });
-  }
-});
-
-function cacheDir() {
-  testDir = join(
+function testCacheDir() {
+  return join(
     tmpdir(),
     `isr-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
   );
-  return testDir;
 }
 
 const BUILD_ID = "test-build-id";
@@ -43,7 +33,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -60,7 +50,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -84,7 +74,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -103,7 +93,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -128,7 +118,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -163,7 +153,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -191,7 +181,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );
@@ -224,7 +214,7 @@ describe("createISRHandler", () => {
     const isr = createISRHandler(
       handler,
       1024 * 1024,
-      cacheDir(),
+      testCacheDir(),
       BUILD_ID,
       false
     );

@@ -17,7 +17,7 @@ export interface AdapterOptions {
    * Absolute `file://` URL to `dist/server/`. Same rationale as {@link client}.
    */
   server: string;
-  /** Absolute filesystem path to `dist/server/.astro-bun-adapter/`. */
+  /** Relative path to the adapter directory within `dist/server/` (e.g. `".astro-bun-adapter"`). Resolved at runtime against the server directory. */
   adapterDir: string;
   /** Name of the assets directory (default `_astro`). */
   assets: string;
@@ -69,10 +69,11 @@ export interface ManifestEntry {
 export type StaticManifest = Record<string, ManifestEntry>;
 
 /** An ISR request handler that takes a Request and pathname, returning a Response. */
-export type ISRHandler = (
-  request: Request,
-  pathname: string
-) => Promise<Response>;
+export interface ISRHandler {
+  (request: Request, pathname: string): Promise<Response>;
+  /** Drain pending writes and flush cache state to disk. */
+  shutdown: () => Promise<void>;
+}
 
 /** The exports returned by `createExports()` in the server entrypoint. */
 export interface ServerExports {

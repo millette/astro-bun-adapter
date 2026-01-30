@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ISRCacheEntry } from "../types.ts";
@@ -439,6 +439,36 @@ describe("PersistentLRUCache", () => {
     cache2.destroy();
   });
 
+  test("save — drains all pending writes before flushing index", async () => {
+    const dir = testCacheDir();
+    const cache = new PersistentLRUCache({
+      maxByteSize: 1024,
+      cacheDir: dir,
+      buildId: BUILD_ID,
+      preFillMemoryCache: false,
+    });
+
+    // Set multiple entries without awaiting save in between.
+    await cache.set("a", makeEntry(50));
+    await cache.set("b", makeEntry(50));
+    await cache.set("c", makeEntry(50));
+
+    // save() should drain all pending writes.
+    await cache.save();
+
+    // Verify all entries are on disk via the index.
+    const index = await Bun.file(join(dir, BUILD_ID, "index.json")).json();
+    expect(Object.keys(index).length).toBe(3);
+
+    // Verify each .cbor file exists.
+    const entriesDir = join(dir, BUILD_ID, "entries");
+    for (const hash of Object.keys(index)) {
+      expect(existsSync(join(entriesDir, `${hash}.cbor`))).toBe(true);
+    }
+
+    cache.destroy();
+  });
+
   test("individual entry files — each set creates a .cbor file", async () => {
     const dir = testCacheDir();
     const cache = new PersistentLRUCache({
@@ -463,5 +493,119 @@ describe("PersistentLRUCache", () => {
     }
 
     cache.destroy();
+  });
+
+  describe("vacuum", () => {
+    test("removes old build directories on new cache creation", async () => {
+      const dir = testCacheDir();
+
+      const cache1 = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: "build-a",
+        preFillMemoryCache: false,
+      });
+      await cache1.set("a", makeEntry(50));
+      await cache1.save();
+      cache1.destroy();
+
+      expect(existsSync(join(dir, "build-a"))).toBe(true);
+
+      // Creating a cache with a new build ID should vacuum build-a.
+      const cache2 = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: "build-b",
+        preFillMemoryCache: false,
+      });
+      // Wait for load() to finish.
+      await cache2.get("anything");
+
+      expect(existsSync(join(dir, "build-a"))).toBe(false);
+      expect(existsSync(join(dir, "build-b"))).toBe(true);
+
+      cache2.destroy();
+    });
+
+    test("corrupted manifest.json allows fresh start", async () => {
+      const dir = testCacheDir();
+      mkdirSync(dir, { recursive: true });
+      await Bun.write(join(dir, "manifest.json"), "not valid json");
+
+      const cache = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: BUILD_ID,
+        preFillMemoryCache: false,
+      });
+
+      // Should not throw — starts fresh.
+      await cache.set("a", makeEntry(50));
+      expect(await cache.get("a")).toBeDefined();
+
+      cache.destroy();
+    });
+
+    test("current build directory is preserved during vacuum", async () => {
+      const dir = testCacheDir();
+
+      const cache1 = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: BUILD_ID,
+        preFillMemoryCache: false,
+      });
+      await cache1.set("a", makeEntry(50));
+      await cache1.save();
+      cache1.destroy();
+
+      // Recreate with the same build ID — entries should survive.
+      const cache2 = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: BUILD_ID,
+        preFillMemoryCache: false,
+      });
+
+      const a = await cache2.get("a");
+      expect(a).toBeDefined();
+      expect(a?.body.byteLength).toBe(50);
+
+      cache2.destroy();
+    });
+
+    test("removes orphaned directories not in manifest", async () => {
+      const dir = testCacheDir();
+
+      // Create a cache to establish a manifest.
+      const cache1 = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: BUILD_ID,
+        preFillMemoryCache: false,
+      });
+      await cache1.set("a", makeEntry(50));
+      await cache1.save();
+      cache1.destroy();
+
+      // Manually create an orphaned directory.
+      mkdirSync(join(dir, "orphaned-build"), { recursive: true });
+      expect(existsSync(join(dir, "orphaned-build"))).toBe(true);
+
+      // Creating a new cache should clean up the orphan.
+      const cache2 = new PersistentLRUCache({
+        maxByteSize: 1024,
+        cacheDir: dir,
+        buildId: "new-build",
+        preFillMemoryCache: false,
+      });
+      await cache2.get("anything");
+
+      expect(existsSync(join(dir, "orphaned-build"))).toBe(false);
+      expect(existsSync(join(dir, BUILD_ID))).toBe(false);
+      expect(existsSync(join(dir, "new-build"))).toBe(true);
+
+      cache2.destroy();
+    });
   });
 });

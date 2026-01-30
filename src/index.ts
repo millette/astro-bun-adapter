@@ -107,11 +107,13 @@ export default function bunAdapter(
       "astro:config:done": ({ setAdapter, config: doneConfig }) => {
         config = doneConfig;
         const isDevMode = command === "dev";
-        const isrConfig =
+        type ISRConfig = NonNullable<Exclude<BunAdapterConfig["isr"], boolean>>;
+        const isrConfig: ISRConfig =
           typeof adapterConfig?.isr === "object" ? adapterConfig.isr : {};
+        const relativeAdapterDir = ".astro-bun-adapter";
         adapterDir = join(
           fileURLToPath(new URL(doneConfig.build.server)),
-          ".astro-bun-adapter"
+          relativeAdapterDir
         );
         setAdapter(
           getAdapter({
@@ -119,7 +121,7 @@ export default function bunAdapter(
             port: doneConfig.server.port,
             client: doneConfig.build.client.toString(),
             server: doneConfig.build.server.toString(),
-            adapterDir,
+            adapterDir: relativeAdapterDir,
             assets: doneConfig.build.assets,
             // ISR is disabled in dev mode — it only applies to production builds
             // where SSR responses can be cached based on s-maxage / stale-while-revalidate.
@@ -127,8 +129,7 @@ export default function bunAdapter(
               !isDevMode && adapterConfig?.isr
                 ? {
                     maxByteSize: isrConfig.maxByteSize ?? 50 * 1024 * 1024,
-                    cacheDir:
-                      isrConfig.cacheDir ?? join(adapterDir, "isr-cache"),
+                    cacheDir: isrConfig.cacheDir ?? "isr-cache",
                     preFillMemoryCache: isrConfig.preFillMemoryCache ?? false,
                   }
                 : false,

@@ -73,8 +73,11 @@ export async function generateStaticManifest(
       const pathname = `/${relative(clientDir, filePath)}`;
       const contentType = lookup(filePath);
       const headers: Record<string, string> = {
-        ...routeHeaders?.[filePathToRoute(pathname)],
+        // Adapter defaults (can be overridden by route-level headers).
         "Cache-Control": getCacheControl(pathname, assetsPrefix),
+        // Route-level headers (e.g. CSP, CORS) take precedence over defaults.
+        ...routeHeaders?.[filePathToRoute(pathname)],
+        // Content-derived headers — always set by the adapter.
         ETag: `"${hash}"`,
         "Content-Length": String(content.byteLength),
       };

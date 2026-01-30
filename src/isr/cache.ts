@@ -1,4 +1,4 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { decode, encode } from "cbor2";
 import debug from "debug";
@@ -14,8 +14,8 @@ class CacheNode {
   public readonly key: string;
   public value: ISRCacheEntry;
   public size: number;
-  public older: CacheNode | BoundaryNode | null = null;
-  public newer: CacheNode | BoundaryNode | null = null;
+  public older!: CacheNode | BoundaryNode;
+  public newer!: CacheNode | BoundaryNode;
 
   constructor(key: string, value: ISRCacheEntry, size: number) {
     this.key = key;
@@ -29,8 +29,13 @@ class CacheNode {
  * Eliminates null-checks when inserting or removing real nodes.
  */
 class BoundaryNode {
-  public older: CacheNode | BoundaryNode | null = null;
-  public newer: CacheNode | BoundaryNode | null = null;
+  public older: CacheNode | BoundaryNode;
+  public newer: CacheNode | BoundaryNode;
+
+  constructor() {
+    this.older = this;
+    this.newer = this;
+  }
 }
 
 interface PersistentLRUCacheOptions {
@@ -45,6 +50,9 @@ interface PersistentLRUCacheOptions {
  * doubly-linked list. L2 is per-entry CBOR files on disk. When the LRU evicts
  * entries due to byte budget pressure, they remain on disk and can be loaded
  * back on a subsequent `get()` miss.
+ *
+ * Note: The cache does not enforce TTL. Expiration is handled externally by the
+ * ISR handler, which checks `cachedAt + sMaxAge` on every read.
  *
  * Layout: FRONT (newest) <-> ... <-> BACK (oldest)
  */
@@ -64,7 +72,11 @@ export class PersistentLRUCache {
 
   /** Pathnames known to exist on disk. */
   private readonly diskKeys = new Set<string>();
-  /** pathname → SHA-256 hex hash (avoids recomputing). */
+  /**
+   * pathname → SHA-256 hex hash (avoids recomputing).
+   * Note: the on-disk index inverts this mapping (hash → pathname) for
+   * human-readable JSON. See {@link writeIndex} and {@link load}.
+   */
   private readonly hashIndex = new Map<string, string>();
 
   /** Whether the entries directory has been created. */
@@ -137,6 +149,12 @@ export class PersistentLRUCache {
     if (this.ready !== true) await this.ready;
     const size = value.body.byteLength;
 
+    // Skip entries that exceed the entire budget — they'd be evicted immediately.
+    if (size > this.maxByteSize) {
+      log(`Skipping oversized entry: ${key} (${size} > ${this.maxByteSize})`);
+      return;
+    }
+
     // Update in-memory LRU.
     const existing = this.entries.get(key);
     if (existing) {
@@ -155,10 +173,9 @@ export class PersistentLRUCache {
 
     // Background disk persistence (tracked for `save()` drain).
     this.diskKeys.add(key);
-    const write = this.persistEntry(key, value)
-      .catch(() => {})
-      .finally(() => this.pendingWrites.delete(write));
+    const write = this.persistEntry(key, value).catch(() => {});
     this.pendingWrites.add(write);
+    void write.finally(() => this.pendingWrites.delete(write));
   }
 
   /**
@@ -182,7 +199,9 @@ export class PersistentLRUCache {
       const hash = this.hashPathname(key);
       this.diskKeys.delete(key);
       this.hashIndex.delete(key);
-      rm(this.entryPath(hash), { force: true }).catch(() => {});
+      const removal = rm(this.entryPath(hash), { force: true }).catch(() => {});
+      this.pendingWrites.add(removal);
+      void removal.finally(() => this.pendingWrites.delete(removal));
       this.scheduleIndexWrite();
     }
   }
@@ -194,10 +213,11 @@ export class PersistentLRUCache {
     await this.writeIndex();
   }
 
-  /** Cancel pending timers and best-effort index flush. */
-  destroy(): void {
+  /** Drain pending writes, cancel timers, and flush the index. */
+  async destroy(): Promise<void> {
+    await Promise.all(this.pendingWrites);
     this.clearIndexTimer();
-    this.writeIndex().catch(() => {});
+    await this.writeIndex().catch(() => {});
   }
 
   /**
@@ -211,6 +231,14 @@ export class PersistentLRUCache {
       const path = this.entryPath(hash);
       const raw = new Uint8Array(await Bun.file(path).arrayBuffer());
       const entry = decode(raw) as ISRCacheEntry;
+
+      // A concurrent set() may have inserted this key while we were reading
+      // from disk — if so, promote the existing node and return its value.
+      const existing = this.entries.get(key);
+      if (existing) {
+        this.promote(existing);
+        return existing.value;
+      }
 
       // Insert into in-memory LRU (may evict others — they stay on disk).
       const size = entry.body.byteLength;
@@ -302,7 +330,7 @@ export class PersistentLRUCache {
   private insertAfterFront(node: CacheNode): void {
     node.older = this.front;
     node.newer = this.front.newer;
-    (this.front.newer as CacheNode | BoundaryNode).older = node;
+    this.front.newer.older = node;
     this.front.newer = node;
   }
 
@@ -311,8 +339,8 @@ export class PersistentLRUCache {
    * @param node - The node to detach.
    */
   private detach(node: CacheNode): void {
-    (node.older as CacheNode | BoundaryNode).newer = node.newer;
-    (node.newer as CacheNode | BoundaryNode).older = node.older;
+    node.older.newer = node.newer;
+    node.newer.older = node.older;
   }
 
   /**
@@ -324,23 +352,15 @@ export class PersistentLRUCache {
     this.insertAfterFront(node);
   }
 
-  /**
-   * Remove and return the oldest node (the one just before the back boundary).
-   * @returns The evicted node.
-   */
-  private evictLast(): CacheNode {
-    const oldest = this.back.older as CacheNode;
-    this.detach(oldest);
-    return oldest;
-  }
-
   /** Drop oldest entries from memory until within byte budget. They remain on disk. */
   private evictOverBudget(): void {
     while (this.currentBytes > this.maxByteSize && this.entries.size > 0) {
-      const evicted = this.evictLast();
-      log(`LRU evicted from memory: ${evicted.key} (${evicted.size} bytes)`);
-      this.entries.delete(evicted.key);
-      this.currentBytes -= evicted.size;
+      const oldest = this.back.older;
+      if (oldest instanceof BoundaryNode) break;
+      this.detach(oldest);
+      log(`LRU evicted from memory: ${oldest.key} (${oldest.size} bytes)`);
+      this.entries.delete(oldest.key);
+      this.currentBytes -= oldest.size;
       // Entry stays on disk — do NOT remove from diskKeys.
     }
   }
@@ -362,13 +382,31 @@ export class PersistentLRUCache {
       }
     }
 
-    for (const oldId of manifest.buildIds) {
+    const trackedIds = new Set(manifest.buildIds);
+
+    for (const oldId of trackedIds) {
       if (oldId === this.buildId) continue;
       log(`Vacuuming old build: ${oldId}`);
       await rm(join(this.cacheDir, oldId), { recursive: true, force: true });
     }
 
+    // Scan for orphaned directories not tracked in the manifest.
     await mkdir(this.cacheDir, { recursive: true });
+    try {
+      const entries = await readdir(this.cacheDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name === this.buildId) continue;
+        log(`Vacuuming orphaned directory: ${entry.name}`);
+        await rm(join(this.cacheDir, entry.name), {
+          recursive: true,
+          force: true,
+        });
+      }
+    } catch {
+      // Cache directory may not exist yet — ignore.
+    }
+
     await Bun.write(manifestPath, JSON.stringify({ buildIds: [this.buildId] }));
   }
 
@@ -411,31 +449,48 @@ export class PersistentLRUCache {
     // pre-fill proceeds in the background.
     this.ready = true;
 
-    if (!this.preFillMemoryCache) return;
+    if (this.preFillMemoryCache) {
+      void this.preFill(index);
+    }
+  }
 
-    // Pre-fill in-memory LRU from disk entries up to maxByteSize.
-    // Uses loadFromDisk() so concurrent get() calls deduplicate.
+  /**
+   * Pre-fill the in-memory LRU from disk entries up to maxByteSize.
+   * Runs in the background after `load()` resolves so it doesn't block callers.
+   * Uses `loadFromDisk()` so concurrent `get()` calls deduplicate.
+   */
+  private async preFill(index: Record<string, string>): Promise<void> {
+    const BATCH_SIZE = 8;
+    const pathnames = Object.values(index);
     let preFilled = 0;
-    for (const pathname of Object.values(index)) {
-      // Already loaded by a concurrent get() — skip.
-      if (this.entries.has(pathname)) continue;
 
-      // Check if loading this entry would exceed budget (approximate — the
-      // actual size isn't known until decoded, but we stop once we hit the
-      // limit inside loadFromDisk → evictOverBudget).
+    for (let i = 0; i < pathnames.length; i += BATCH_SIZE) {
       if (this.currentBytes >= this.maxByteSize) break;
 
-      // Kick off a load. If a get() already started one, piggyback on it.
-      const inflight = this.pendingLoads.get(pathname);
-      if (inflight) {
-        await inflight;
-        continue;
+      const batch: Promise<ISRCacheEntry | undefined>[] = [];
+      for (let j = i; j < Math.min(i + BATCH_SIZE, pathnames.length); j++) {
+        const pathname = pathnames[j];
+
+        // Already loaded by a concurrent get() — skip.
+        if (this.entries.has(pathname)) continue;
+
+        // Budget exceeded — stop adding to this batch.
+        if (this.currentBytes >= this.maxByteSize) break;
+
+        // Piggyback on an in-flight load if one exists.
+        const inflight = this.pendingLoads.get(pathname);
+        if (inflight) {
+          batch.push(inflight);
+          continue;
+        }
+
+        const load = this.loadFromDisk(pathname);
+        this.pendingLoads.set(pathname, load);
+        batch.push(load);
       }
 
-      const load = this.loadFromDisk(pathname);
-      this.pendingLoads.set(pathname, load);
-      await load;
-      preFilled++;
+      const results = await Promise.all(batch);
+      preFilled += results.filter((entry) => entry !== undefined).length;
     }
 
     log(`Pre-filled ${preFilled} entries into memory`);
