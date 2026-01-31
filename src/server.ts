@@ -130,10 +130,13 @@ export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
           return new Response(null, { status: 304 });
         }
 
-        return new Response(Bun.file(join(clientDir, pathname.slice(1))), {
-          status: 200,
-          headers: meta.headers,
-        });
+        return new Response(
+          Bun.file(join(clientDir, meta.filePath ?? pathname.slice(1))),
+          {
+            status: 200,
+            headers: meta.headers,
+          }
+        );
       }
 
       // ISR disabled or non-GET — passthrough to SSR.

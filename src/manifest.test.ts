@@ -57,6 +57,52 @@ describe("generateStaticManifest", () => {
     expect(headers["Content-Length"]).toBe(String("home page".length));
   });
 
+  test("HTML files produce route alias entries with filePath", async () => {
+    const clientDir = testDir();
+    const outDir = testDir();
+
+    // /about/index.html → route alias /about
+    mkdirSync(join(clientDir, "about"), { recursive: true });
+    writeFileSync(join(clientDir, "about", "index.html"), "about page");
+
+    // /index.html → route alias /
+    writeFileSync(join(clientDir, "index.html"), "home page");
+
+    // /docs.html → route alias /docs
+    writeFileSync(join(clientDir, "docs.html"), "docs page");
+
+    // Non-HTML file should NOT get a route alias
+    mkdirSync(join(clientDir, "_astro"), { recursive: true });
+    writeFileSync(join(clientDir, "_astro", "main.js"), "console.log()");
+
+    await generateStaticManifest(clientDir, outDir, "_astro");
+
+    const manifest = readManifest(outDir);
+
+    // /about/index.html → route alias at /about
+    expect(manifest["/about"]).toBeDefined();
+    expect(manifest["/about"].filePath).toBe("about/index.html");
+    expect(manifest["/about"].headers.ETag).toBe(
+      manifest["/about/index.html"].headers.ETag
+    );
+    expect(manifest["/about/index.html"].filePath).toBeUndefined();
+
+    // /index.html → route alias at /
+    expect(manifest["/"]).toBeDefined();
+    expect(manifest["/"].filePath).toBe("index.html");
+    expect(manifest["/"].headers.ETag).toBe(
+      manifest["/index.html"].headers.ETag
+    );
+
+    // /docs.html → route alias at /docs
+    expect(manifest["/docs"]).toBeDefined();
+    expect(manifest["/docs"].filePath).toBe("docs.html");
+
+    // Non-HTML: no alias
+    expect(manifest["/_astro/main.js"]).toBeDefined();
+    expect(manifest["/_astro/main"]).toBeUndefined();
+  });
+
   test("route headers like CSP pass through", async () => {
     const clientDir = testDir();
     const outDir = testDir();

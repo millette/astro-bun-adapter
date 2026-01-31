@@ -89,6 +89,13 @@ export async function generateStaticManifest(
 
   for (const [pathname, entry] of entries) {
     manifest[pathname] = entry;
+
+    // Add a route alias for HTML files so clean URLs (e.g. /about) resolve
+    // to the static file (e.g. /about/index.html) without falling through to SSR.
+    const route = filePathToRoute(pathname);
+    if (route !== pathname) {
+      manifest[route] = { ...entry, filePath: pathname.slice(1) };
+    }
   }
 
   const manifestPath = join(outDir, "static-manifest.json");
