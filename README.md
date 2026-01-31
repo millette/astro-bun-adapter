@@ -1,6 +1,6 @@
 # @wyattjoh/astro-bun-adapter
 
-An Astro adapter that runs your SSR site on Bun using `Bun.serve`. Serves static files from a pre-built manifest with ETag caching and falls back to Astro SSR for dynamic routes.
+An Astro adapter that runs your SSR site on Bun using `Bun.serve`.
 
 ## Installation
 
@@ -21,8 +21,6 @@ export default defineConfig({
 });
 ```
 
-All Astro output modes are supported: `static`, `server`, and `hybrid`. Prerendered pages are served directly from the static manifest, while dynamic routes fall through to Astro's SSR handler.
-
 Build and run:
 
 ```bash
@@ -30,14 +28,16 @@ bun run build
 bun run ./dist/server/entry.mjs
 ```
 
-## How It Works
+## Features
 
-1. **Build time**: Walks `dist/client/` and generates `dist/server/static-manifest.json` with pre-computed ETags, MIME types, and cache headers for every static file.
-2. **Runtime**: `Bun.serve` checks incoming requests against the manifest. Static files are served directly with proper caching (`/_astro/*` gets immutable 1-year headers). Everything else falls through to Astro's SSR handler.
+- **All output modes** — `static`, `server`, and `hybrid` are all supported.
+- **Optimized static serving** — Pre-rendered pages and static assets are served directly from a build-time manifest with ETag/304 support. Vite-hashed assets (`/_astro/*`) get immutable 1-year cache headers. Pre-rendered HTML pages are accessible via clean URLs (e.g. `/about` serves `/about/index.html`).
+- **Route-level headers** — When Astro's `experimentalStaticHeaders` is enabled, per-route headers (e.g. `Content-Security-Policy`) are included in static responses.
+- **ISR (Incremental Static Regeneration)** — Optional two-tier cache for SSR responses. See [ISR](#isr-incremental-static-regeneration-1) below.
 
 ## ISR (Incremental Static Regeneration)
 
-Enable ISR to cache SSR responses in-memory using an LRU cache. Cached responses are served according to standard `Cache-Control` semantics (`s-maxage` and `stale-while-revalidate`).
+Enable ISR to cache SSR responses using an in-memory LRU backed by persistent disk storage. Cached responses are served according to `Cache-Control` semantics (`s-maxage` and `stale-while-revalidate`).
 
 ```js
 // astro.config.mjs
@@ -50,19 +50,29 @@ export default defineConfig({
 });
 ```
 
-To customize the maximum cache byte size (default: 50 MB):
+To customize ISR options:
 
 ```js
-adapter: bun({ isr: { maxByteSize: 100 * 1024 * 1024 } }), // 100 MB
+adapter: bun({
+  isr: {
+    maxByteSize: 100 * 1024 * 1024, // In-memory budget (default: 50 MB)
+    cacheDir: "isr-cache",           // Disk cache directory (default: "isr-cache")
+    preFillMemoryCache: false,       // Load disk cache into memory on startup (default: false)
+  },
+}),
 ```
 
-ISR only applies to `GET` requests whose responses include an `s-maxage` directive in their `Cache-Control` header. When a cached entry enters the `stale-while-revalidate` window, the stale response is served immediately while a background revalidation runs. Concurrent requests for the same path are deduplicated so only one SSR render is in-flight at a time.
+- Responses must include `Cache-Control: s-maxage=N` to be cached. Stale entries within the `stale-while-revalidate` window are served immediately while revalidating in the background.
+- Concurrent requests for the same path are deduplicated — only one SSR render runs at a time.
+- Image endpoint responses are automatically ISR-cacheable (the adapter adds `s-maxage` to Astro's image `Cache-Control`).
+- The cache survives restarts: evicted entries stay on disk and reload on demand. Each build gets its own cache namespace, and old caches are cleaned up automatically.
+- Responses include an `x-astro-cache` header: `HIT`, `STALE`, `MISS`, or `BYPASS`.
 
 ## Environment Variables
 
 - `PORT` — Override the server port (default: from Astro config or `4321`)
 - `HOST` — Override the server hostname
-- `DEBUG` — Enable debug logging via the [`debug`](https://www.npmjs.com/package/debug) package. Use `DEBUG=@wyattjoh/astro-bun-adapter:*` to enable all adapter logs, or target specific subsystems:
+- `DEBUG` — Enable debug logging via the [`debug`](https://www.npmjs.com/package/debug) package. Use `DEBUG=@wyattjoh/astro-bun-adapter:*` for all adapter logs, or target specific subsystems:
   - `@wyattjoh/astro-bun-adapter:isr` — ISR cache hits, misses, revalidations, and bypasses
   - `@wyattjoh/astro-bun-adapter:cache` — LRU cache internals (evictions, disk persistence, restore)
 
