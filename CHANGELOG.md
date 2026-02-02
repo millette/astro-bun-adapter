@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/wyattjoh/astro-bun-adapter/compare/v1.2.1...v1.3.0) (2026-02-02)
+
+
+### Features
+
+* add on-demand ISR cache expiration API ([a659f5c](https://github.com/wyattjoh/astro-bun-adapter/commit/a659f5c6974590105403209ff05626c14422fd34))
+
 ## [1.2.1](https://github.com/wyattjoh/astro-bun-adapter/compare/v1.2.0...v1.2.1) (2026-01-31)
 
 
