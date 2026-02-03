@@ -21,6 +21,11 @@ export interface AdapterOptions {
   adapterDir: string;
   /** Name of the assets directory (default `_astro`). */
   assets: string;
+  /**
+   * `Cache-Control` header for non-hashed static assets. Hashed assets
+   * (`/_astro/*`) always use `public, max-age=31536000, immutable`.
+   */
+  staticCacheControl: string;
   /** Image endpoint route with leading slash (e.g. "/_image"). */
   imageEndpointRoute: string;
   /**

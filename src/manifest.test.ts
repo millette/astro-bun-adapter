@@ -29,9 +29,13 @@ describe("generateStaticManifest", () => {
     mkdirSync(join(clientDir, "about"), { recursive: true });
     writeFileSync(join(clientDir, "about", "index.html"), "about page");
 
-    await generateStaticManifest(clientDir, outDir, "_astro", {
-      "/about": { "Cache-Control": "no-cache" },
-    });
+    await generateStaticManifest(
+      clientDir,
+      outDir,
+      "_astro",
+      { "/about": { "Cache-Control": "no-cache" } },
+      "public, max-age=86400, must-revalidate"
+    );
 
     const manifest = readManifest(outDir);
     expect(manifest["/about/index.html"].headers["Cache-Control"]).toBe(
@@ -45,9 +49,13 @@ describe("generateStaticManifest", () => {
 
     writeFileSync(join(clientDir, "index.html"), "home page");
 
-    await generateStaticManifest(clientDir, outDir, "_astro", {
-      "/": { ETag: "bogus", "Content-Length": "9999" },
-    });
+    await generateStaticManifest(
+      clientDir,
+      outDir,
+      "_astro",
+      { "/": { ETag: "bogus", "Content-Length": "9999" } },
+      "public, max-age=86400, must-revalidate"
+    );
 
     const manifest = readManifest(outDir);
     const headers = manifest["/index.html"].headers;
@@ -75,7 +83,13 @@ describe("generateStaticManifest", () => {
     mkdirSync(join(clientDir, "_astro"), { recursive: true });
     writeFileSync(join(clientDir, "_astro", "main.js"), "console.log()");
 
-    await generateStaticManifest(clientDir, outDir, "_astro");
+    await generateStaticManifest(
+      clientDir,
+      outDir,
+      "_astro",
+      undefined,
+      "public, max-age=86400, must-revalidate"
+    );
 
     const manifest = readManifest(outDir);
 
@@ -109,9 +123,13 @@ describe("generateStaticManifest", () => {
 
     writeFileSync(join(clientDir, "index.html"), "page");
 
-    await generateStaticManifest(clientDir, outDir, "_astro", {
-      "/": { "Content-Security-Policy": "default-src 'self'" },
-    });
+    await generateStaticManifest(
+      clientDir,
+      outDir,
+      "_astro",
+      { "/": { "Content-Security-Policy": "default-src 'self'" } },
+      "public, max-age=86400, must-revalidate"
+    );
 
     const manifest = readManifest(outDir);
     expect(manifest["/index.html"].headers["Content-Security-Policy"]).toBe(

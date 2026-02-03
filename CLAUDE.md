@@ -36,7 +36,7 @@ Source files in `src/`:
 - Build hooks run under **Node**, so `manifest.ts` must use `node:` APIs, not Bun APIs.
 - The runtime server uses the **Web-standard `App`** (not `NodeApp`) since Bun natively supports the Fetch API.
 - Adapter args are serialized as JSON into `entry.mjs` at build time, so only config-derived values can be passed — not build artifacts.
-- `/_astro/*` paths get immutable 1-year cache headers; everything else gets 24-hour must-revalidate.
+- `/_astro/*` paths get immutable 1-year cache headers; everything else defaults to 24-hour must-revalidate (configurable via the `staticCacheControl` adapter option). Route-level `experimentalStaticHeaders` take precedence over `staticCacheControl`.
 - ISR caching uses `s-maxage` / `stale-while-revalidate` from response `Cache-Control` headers, with background revalidation and request coalescing.
 - ISR uses a two-tier cache — entries evicted from memory (L1) remain on disk (L2) and are loaded back on demand, so memory pressure doesn't lose cached data.
 - Each build writes a unique build ID; ISR cache directories are namespaced by build ID, and old build caches are vacuumed on startup.

@@ -72,6 +72,16 @@ export interface ISRConfig {
 /** User-facing configuration for the Bun adapter. */
 interface BunAdapterConfig {
   /**
+   * Override the default `Cache-Control` header for non-hashed static assets.
+   * Hashed assets under `/_astro/` always use
+   * `public, max-age=31536000, immutable`. Route-level
+   * `experimentalStaticHeaders` still take precedence over this value.
+   *
+   * @default "public, max-age=86400, must-revalidate"
+   */
+  staticCacheControl?: string;
+
+  /**
    * Enable ISR (Incremental Static Regeneration). When `true`, SSR responses
    * with `s-maxage` and optional `stale-while-revalidate` Cache-Control
    * directives are cached in-memory (up to 50 MB by default) and served
@@ -95,6 +105,10 @@ interface BunAdapterConfig {
 export default function bun(
   adapterConfig?: BunAdapterConfig
 ): AstroIntegration {
+  const staticCacheControl =
+    adapterConfig?.staticCacheControl ??
+    "public, max-age=86400, must-revalidate";
+
   let config: AstroConfig | undefined;
   let command: string | undefined;
   let adapterDir: string | undefined;
@@ -148,6 +162,7 @@ export default function bun(
             server: doneConfig.build.server.toString(),
             adapterDir: relativeAdapterDir,
             assets: doneConfig.build.assets,
+            staticCacheControl,
             imageEndpointRoute: doneConfig.image.endpoint.route.startsWith("/")
               ? doneConfig.image.endpoint.route
               : `/${doneConfig.image.endpoint.route}`,
@@ -193,7 +208,8 @@ export default function bun(
           clientDir.pathname,
           adapterDir,
           config.build.assets,
-          serializedRouteHeaders
+          serializedRouteHeaders,
+          staticCacheControl
         );
 
         // Write a unique build ID so the server can namespace its ISR cache

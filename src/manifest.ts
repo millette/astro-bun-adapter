@@ -4,12 +4,16 @@ import { join, relative } from "node:path";
 import { lookup } from "mrmime";
 import type { ManifestEntry, StaticManifest } from "./types.ts";
 
-/** Return the appropriate Cache-Control header — immutable for Vite-hashed assets, 24h otherwise. */
-function getCacheControl(pathname: string, assetsPrefix: string): string {
+/** Return the appropriate Cache-Control header — immutable for Vite-hashed assets, configurable otherwise. */
+function getCacheControl(
+  pathname: string,
+  assetsPrefix: string,
+  staticCacheControl: string
+): string {
   if (pathname.startsWith(`/${assetsPrefix}/`)) {
     return "public, max-age=31536000, immutable";
   }
-  return "public, max-age=86400, must-revalidate";
+  return staticCacheControl;
 }
 
 /** Recursively collect all file paths under a directory. */
@@ -60,7 +64,8 @@ export async function generateStaticManifest(
   clientDir: string,
   outDir: string,
   assetsPrefix: string,
-  routeHeaders?: Record<string, Record<string, string>>
+  routeHeaders: Record<string, Record<string, string>> | undefined,
+  staticCacheControl: string
 ): Promise<void> {
   const files = await walk(clientDir);
   const manifest: StaticManifest = {};
@@ -76,7 +81,11 @@ export async function generateStaticManifest(
       const contentType = lookup(filePath);
       const headers: Record<string, string> = {
         // Adapter defaults (can be overridden by route-level headers).
-        "Cache-Control": getCacheControl(pathname, assetsPrefix),
+        "Cache-Control": getCacheControl(
+          pathname,
+          assetsPrefix,
+          staticCacheControl
+        ),
         // Route-level headers (e.g. CSP, CORS) take precedence over defaults.
         ...routeHeaders?.[filePathToRoute(pathname)],
         // Content-derived headers — always set by the adapter.
