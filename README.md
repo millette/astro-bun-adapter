@@ -31,7 +31,7 @@ bun run ./dist/server/entry.mjs
 ## Features
 
 - **All output modes** — `static`, `server`, and `hybrid` are all supported.
-- **Optimized static serving** — Pre-rendered pages and static assets are served directly from a build-time manifest with ETag/304 support. Vite-hashed assets (`/_astro/*`) get immutable 1-year cache headers; other static assets default to 24-hour must-revalidate (configurable via [`staticCacheControl`](#static-cache-control)). Pre-rendered HTML pages are accessible via clean URLs (e.g. `/about` serves `/about/index.html`).
+- **Optimized static serving** — Pre-rendered pages and static assets are served directly from a build-time manifest with ETag/304 support. Vite-hashed assets (`/_astro/*`) get immutable 1-year cache headers; other static assets default to 24-hour must-revalidate (configurable via [`staticCacheControl`](#static-cache-control)). Pre-rendered HTML pages are accessible via clean URLs (e.g. `/about` serves `/about/index.html`). Static responses include an `x-astro-cache: STATIC` header.
 - **Route-level headers** — When Astro's `experimentalStaticHeaders` is enabled, per-route headers (e.g. `Content-Security-Policy`) are included in static responses.
 - **ISR (Incremental Static Regeneration)** — Optional two-tier cache for SSR responses. See [ISR](#isr-incremental-static-regeneration-1) below.
 
@@ -78,7 +78,7 @@ adapter: bun({
 - Concurrent requests for the same path are deduplicated — only one SSR render runs at a time.
 - Image endpoint responses are automatically ISR-cacheable (the adapter adds `s-maxage` to Astro's image `Cache-Control`).
 - The cache survives restarts: evicted entries stay on disk and reload on demand. Each build gets its own cache namespace, and old caches are cleaned up automatically.
-- Responses include an `x-astro-cache` header: `HIT`, `STALE`, `MISS`, or `BYPASS`.
+- ISR responses include an `x-astro-cache` header: `HIT`, `STALE`, `MISS`, or `BYPASS`.
 
 ### On-Demand Cache Expiration (Experimental)
 

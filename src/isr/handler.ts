@@ -1,5 +1,6 @@
 import { parse as parseCacheControl } from "cache-control-parser";
 import debug from "debug";
+import { CACHE_HEADER } from "../constants.ts";
 import type { ISRCache, ISRCacheEntry, ISRHandler } from "../types.ts";
 import { PersistentLRUCache } from "./cache.ts";
 
@@ -54,7 +55,7 @@ function responseFromEntry(
     status: entry.status,
     headers: entry.headers,
   });
-  response.headers.set("x-astro-cache", cacheStatus);
+  response.headers.set(CACHE_HEADER, cacheStatus);
   return response;
 }
 
@@ -103,7 +104,7 @@ function renderToEntry(
     });
 
     // Add the cache status header to the original response.
-    response.headers.set("x-astro-cache", cacheStatus);
+    response.headers.set(CACHE_HEADER, cacheStatus);
 
     return { response, entryPromise };
   });
@@ -210,7 +211,7 @@ export function createISRHandler(options: ISRHandlerOptions): ISRHandler {
     // Not cacheable — fall through to direct SSR.
     log(`ISR BYPASS for ${cacheKey} (not cacheable)`);
     const response = await origin(request);
-    response.headers.set("x-astro-cache", "BYPASS");
+    response.headers.set(CACHE_HEADER, "BYPASS");
     return response;
   }) as ISRHandler;
 

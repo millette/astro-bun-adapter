@@ -5,6 +5,7 @@ import type { SSRManifest } from "astro";
 import { App } from "astro/app";
 import { setGetEnv } from "astro/env/setup";
 import { registerCache } from "./cache.ts";
+import { CACHE_HEADER } from "./constants.ts";
 import { createISRHandler } from "./isr/handler.ts";
 import type {
   AdapterOptions,
@@ -133,8 +134,10 @@ export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
         const meta = staticManifest.get(pathname);
 
         if (meta) {
+          const headers = new Headers(meta.headers);
+          headers.set(CACHE_HEADER, "STATIC");
+
           if (request.headers.get("if-none-match") === meta.headers.ETag) {
-            const headers = new Headers(meta.headers);
             headers.delete("Content-Length");
             headers.delete("Content-Type");
             return new Response(null, { status: 304, headers });
@@ -142,14 +145,16 @@ export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
 
           return new Response(Bun.file(join(clientDir, meta.filePath)), {
             status: 200,
-            headers: meta.headers,
+            headers,
           });
         }
       }
 
       // ISR disabled or non-GET — passthrough to SSR.
       if (!isr || request.method !== "GET") {
-        return handler(request);
+        const response = await handler(request);
+        response.headers.set(CACHE_HEADER, "BYPASS");
+        return response;
       }
 
       const cacheKey = pathname.startsWith(options.imageEndpointRoute)
