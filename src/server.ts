@@ -17,6 +17,21 @@ import type {
 // Required for astro:env/server to resolve env vars at runtime.
 setGetEnv((key) => process.env[key]);
 
+function deepMerge<T extends Record<string, any>>(...objects: Partial<T>[]): T {
+  return objects.reduce((result, obj) => {
+    for (const key in obj) {
+      const val = obj[key];
+      result[key] = (
+        val && typeof val === "object" && !Array.isArray(val) &&
+        result[key] && typeof result[key] === "object"
+      )
+        ? deepMerge(result[key], val)
+        : val;
+    }
+    return result;
+  }, {} as any);
+}
+
 /** Known Astro image endpoint query parameters, pre-sorted for deterministic output. */
 const IMAGE_PARAMS = [
   "background",
@@ -123,7 +138,8 @@ export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
         : "localhost"
       : options.host);
 
-  Bun.serve({
+      // deepMerge
+  const defaultOptions = {
     port,
     hostname: host,
     async fetch(request) {
@@ -162,7 +178,9 @@ export function start(ssrManifest: SSRManifest, options: AdapterOptions): void {
         : pathname;
       return isr(request, cacheKey);
     },
-  });
+  }
+
+  Bun.serve(deepMerge(defaultOptions, options.bun || {}));
 
   logger.info(`Server listening on http://${host}:${port}`);
 }
