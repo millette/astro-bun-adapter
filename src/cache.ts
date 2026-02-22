@@ -1,9 +1,9 @@
 import debug from "debug";
 import type { ISRCache } from "./types.ts";
 
-const log = debug("@wyattjoh/astro-bun-adapter:expire");
+const log = debug("@waglo-private/astro-bun-adapter:expire");
 
-const CACHE_KEY = Symbol.for("@wyattjoh/astro-bun-adapter:isr-cache");
+const CACHE_KEY = Symbol.for("@waglo-private/astro-bun-adapter:isr-cache");
 
 /** @internal Register the ISR cache instance on globalThis for cross-module access. */
 export function registerCache(instance: ISRCache): void {
@@ -24,7 +24,7 @@ function getCache(): ISRCache | undefined {
  *
  * @example
  * ```ts
- * import { unstable_expirePath } from "@wyattjoh/astro-bun-adapter/cache";
+ * import { unstable_expirePath } from "@waglo-private/astro-bun-adapter/cache";
  *
  * // In an API route or middleware:
  * await unstable_expirePath("/blog/my-post");
@@ -51,7 +51,7 @@ export async function unstable_expirePath(pathname: string): Promise<void> {
  *
  * @example
  * ```ts
- * import { unstable_expireAll } from "@wyattjoh/astro-bun-adapter/cache";
+ * import { unstable_expireAll } from "@waglo-private/astro-bun-adapter/cache";
  *
  * // In an API route or middleware:
  * await unstable_expireAll();

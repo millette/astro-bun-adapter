@@ -5,7 +5,7 @@ import {
   unstable_expirePath,
 } from "./cache.ts";
 
-const CACHE_KEY = Symbol.for("@wyattjoh/astro-bun-adapter:isr-cache");
+const CACHE_KEY = Symbol.for("@waglo-private/astro-bun-adapter:isr-cache");
 
 afterEach(() => {
   // Clean up the global cache reference between tests.

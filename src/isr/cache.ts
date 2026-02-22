@@ -4,7 +4,7 @@ import { decode, encode } from "cbor2";
 import debug from "debug";
 import type { ISRCacheEntry } from "../types.ts";
 
-const log = debug("@wyattjoh/astro-bun-adapter:cache");
+const log = debug("@waglo-private/astro-bun-adapter:cache");
 
 /**
  * A node within the doubly-linked list that tracks access recency.

@@ -4,7 +4,7 @@ import { CACHE_HEADER } from "../constants.ts";
 import type { ISRCache, ISRCacheEntry, ISRHandler } from "../types.ts";
 import { PersistentLRUCache } from "./cache.ts";
 
-const log = debug("@wyattjoh/astro-bun-adapter:isr");
+const log = debug("@waglo-private/astro-bun-adapter:isr");
 
 /** Check whether a cache key belongs to the image optimization endpoint. */
 function isImageEndpointKey(key: string, route: string): boolean {

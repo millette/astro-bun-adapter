@@ -16,8 +16,8 @@ export type { AdapterOptions } from "./types.ts";
 /** Build the Astro adapter descriptor with supported features and serialized options. */
 function getAdapter(options: AdapterOptions): AstroAdapter {
   return {
-    name: "@wyattjoh/astro-bun-adapter",
-    serverEntrypoint: "@wyattjoh/astro-bun-adapter/server.js",
+    name: "@waglo-private/astro-bun-adapter",
+    serverEntrypoint: "@waglo-private/astro-bun-adapter/server.js",
     exports: ["handler"],
     // Serialized as a JSON literal into dist/server/entry.mjs at build time.
     // This happens during server entrypoint bundling (before client build),
@@ -115,7 +115,7 @@ export default function bun(
   let routeToHeaders: RouteToHeaders | undefined;
 
   return {
-    name: "@wyattjoh/astro-bun-adapter",
+    name: "@waglo-private/astro-bun-adapter",
     hooks: {
       "astro:config:setup": (options) => {
         command = options.command;
@@ -139,7 +139,7 @@ export default function bun(
           },
           vite: {
             ssr: {
-              noExternal: ["@wyattjoh/astro-bun-adapter"],
+              noExternal: ["@waglo-private/astro-bun-adapter"],
             },
           },
         });
