@@ -1,6 +1,6 @@
 {
   "name": "@waglo-private/astro-bun-adapter",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "description": "Astro adapter for Bun with optimized static file serving and ISR support",
   "type": "module",
   "types": "./dist/index.d.ts",
